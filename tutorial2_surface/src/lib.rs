@@ -21,8 +21,15 @@ impl State {
 
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
+        // instanceはAdapterとSurfaceを作るためのもの
         let instance = wgpu::Instance::new(wgpu::Backends::all());
+
+        // スクリーンに直接描画するために必要。
         let surface = unsafe { instance.create_surface(window) };
+
+        // Adapterはグラフィックカードのハンドル
+        // Adapterを使って、グラフィックカードに関する情報を取得することができる（名前や利用しているバックエンド？など）
+        // Adapterを使ってDeviceとQueueを作る
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -89,9 +96,12 @@ impl State {
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // GPUに送るためのコマンドバッファーを作る
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
+        // begin_render_passに渡されたencoderの借用が解放されないと、このあとencoder.finish()を呼び出せない
+        // そのため、ブロックスコープを一つ区切って借用を引き受けた変数（_render_pass）が解放されるようにする
         {
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -99,12 +109,14 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
+                        // 指定された色でスクリーンをクリアする
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.1,
                             g: 0.2,
                             b: 0.3,
                             a: 1.0,
                         }),
+                        // レンダーの結果を保持する
                         store: true,
                     },
                 }],
@@ -172,6 +184,8 @@ pub async fn run() {
                         },
                     ..
                 } => *control_flow = ControlFlow::Exit,
+
+                // ウィンドウサイズが変わったらresizeメソッドを呼び出す
                 WindowEvent::Resized(physical_size) => {
                     state.resize(*physical_size);
                 }
